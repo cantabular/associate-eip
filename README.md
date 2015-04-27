@@ -24,6 +24,6 @@ to associate an address with itself.
 Given these facts, one can
 
 ```
-curl https://github.com/
-associate-address --ip 54.12.34.56
+curl -sSOL https://github.com/pwaller/associate-eip/releases/download/v0.2/associate-eip
+associate-eip --ip 54.12.34.56
 ```
