@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/awslabs/aws-sdk-go/aws"
 	"github.com/awslabs/aws-sdk-go/service/ec2"
@@ -24,6 +25,28 @@ func Metadata(path string) (string, error) {
 		return "", err
 	}
 	return string(body), nil
+}
+
+// Returns current IP address via metadata endpoint or "" on error.
+func MyIP() string {
+	ip, _ := Metadata("public-ipv4")
+	return ip
+}
+
+func WaitForIP(target string) bool {
+
+	const MAX = 1000 // Most amount of time to wait for IP update
+
+	for i := 0; i < MAX; i++ {
+		ip := MyIP()
+		if ip == target {
+			log.Printf("IP updated!: %q", ip)
+			return true
+		}
+		log.Printf("Waiting for IP address update: %q", ip)
+		time.Sleep(1 * time.Second)
+	}
+	return false
 }
 
 func ThisInstanceID() (string, error) {
@@ -88,4 +111,8 @@ func main() {
 	}
 
 	log.Println("Associated:", *resp.AssociationID)
+
+	if !WaitForIP(publicIP) {
+		log.Fatal("Failed to see public IP update in a timely fashion.")
+	}
 }
