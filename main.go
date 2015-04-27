@@ -35,7 +35,7 @@ func MyIP() string {
 
 func WaitForIP(target string) bool {
 
-	const MAX = 1000 // Most amount of time to wait for IP update
+	const MAX = 120 // Maximum number of seconds to wait
 
 	for i := 0; i < MAX; i++ {
 		ip := MyIP()
