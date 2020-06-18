@@ -7,8 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/awslabs/aws-sdk-go/aws"
-	"github.com/awslabs/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
 func Metadata(path string) (string, error) {
@@ -82,12 +83,14 @@ func main() {
 
 	log.Println("InstanceID:", thisInstanceID, "AZ:", thisAvailabilityZone)
 
-	svc := ec2.New(&aws.Config{
-		Region: thisAvailabilityZone,
+	s := session.Must(session.NewSession())
+
+	svc := ec2.New(s, &aws.Config{
+		Region: &thisAvailabilityZone,
 	})
 
 	desc, err := svc.DescribeAddresses(&ec2.DescribeAddressesInput{
-		PublicIPs: []*string{aws.String(publicIP)},
+		PublicIps: []*string{aws.String(publicIP)},
 	})
 
 	if err != nil {
@@ -101,16 +104,16 @@ func main() {
 	allocation := desc.Addresses[0]
 
 	resp, err := svc.AssociateAddress(&ec2.AssociateAddressInput{
-		InstanceID:         &thisInstanceID,
-		AllowReassociation: aws.Boolean(true),
-		AllocationID:       allocation.AllocationID,
+		InstanceId:         &thisInstanceID,
+		AllowReassociation: aws.Bool(true),
+		AllocationId:       allocation.AllocationId,
 	})
 
 	if err != nil {
 		log.Fatalf("Unable to associate allocation: %v", err)
 	}
 
-	log.Println("Associated:", *resp.AssociationID)
+	log.Println("Associated:", *resp.AssociationId)
 
 	if !WaitForIP(publicIP) {
 		log.Fatal("Failed to see public IP update in a timely fashion.")
