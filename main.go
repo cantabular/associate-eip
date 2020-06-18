@@ -67,7 +67,7 @@ func main() {
 
 	args := os.Args[1:]
 	if len(args) < 1 {
-		log.Fatal("usage: %s <PublicIP>", os.Args[0])
+		log.Fatalf("usage: %s <PublicIP>", os.Args[0])
 	}
 	publicIP := args[0]
 
