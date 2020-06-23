@@ -1,7 +1,15 @@
-FROM golang:1
+FROM golang:1.14.4-alpine
 
-RUN go get -v github.com/awslabs/aws-sdk-go/aws
+# Turn off cgo for a more static binary.
+# Specify cache directory so that we can run as nobody to build the binary.
+ENV CGO_ENABLED=0 XDG_CACHE_HOME=/tmp/.cache
 
-COPY . /go/src/github.com/pwaller/associate-eip
+USER nobody:nogroup
 
-RUN go install github.com/pwaller/associate-eip
+WORKDIR /go/src/github.com/sensiblecodeio/associate-eip
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN go install -v
