@@ -1,45 +1,44 @@
 package main
 
 import (
-	"io/ioutil"
+	"context"
+	"io"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 )
 
-func Metadata(path string) (string, error) {
-	resp, err := http.Get("http://169.254.169.254/latest/meta-data/" + path)
+func Metadata(imdsClient *imds.Client, path string) (string, error) {
+	metadataOutput, err := imdsClient.GetMetadata(context.Background(), &imds.GetMetadataInput{Path: path})
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer metadataOutput.Content.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	metadataOutputBytes, err := io.ReadAll(metadataOutput.Content)
 	if err != nil {
 		return "", err
 	}
-	return string(body), nil
+	return string(metadataOutputBytes), nil
 }
 
 // Returns current IP address via metadata endpoint or "" on error.
-func MyIP() string {
-	ip, _ := Metadata("public-ipv4")
+func MyIP(imdsClient *imds.Client) string {
+	ip, _ := Metadata(imdsClient, "public-ipv4")
 	return ip
 }
 
-func WaitForIP(target string) bool {
+func WaitForIP(imdsClient *imds.Client, target string) bool {
 
 	const MAX = 120 // Maximum number of seconds to wait
 
 	for i := 0; i < MAX; i++ {
-		ip := MyIP()
+		ip := MyIP(imdsClient)
 		if ip == target {
 			log.Printf("IP updated!: %q", ip)
 			return true
@@ -50,12 +49,12 @@ func WaitForIP(target string) bool {
 	return false
 }
 
-func ThisInstanceID() (string, error) {
-	return Metadata("instance-id")
+func ThisInstanceID(imdsClient *imds.Client) (string, error) {
+	return Metadata(imdsClient, "instance-id")
 }
 
-func ThisAvailabilityZone() (string, error) {
-	result, err := Metadata("placement/availability-zone")
+func ThisAvailabilityZone(imdsClient *imds.Client) (string, error) {
+	result, err := Metadata(imdsClient, "placement/availability-zone")
 	if err == nil {
 		result = result[:len(result)-1]
 	}
@@ -71,26 +70,31 @@ func main() {
 	}
 	publicIP := args[0]
 
-	thisInstanceID, err := ThisInstanceID()
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Fatalf("Unable to load AWS config: %v", err)
+	}
+
+	imdsClient := imds.NewFromConfig(cfg)
+
+	thisInstanceID, err := ThisInstanceID(imdsClient)
 	if err != nil {
 		log.Fatalf("Unable to determine instance id: %v", err)
 	}
 
-	thisAvailabilityZone, err := ThisAvailabilityZone()
+	thisAvailabilityZone, err := ThisAvailabilityZone(imdsClient)
 	if err != nil {
 		log.Fatalf("Unable to determine availability zone: %v", err)
 	}
 
 	log.Println("InstanceID:", thisInstanceID, "AZ:", thisAvailabilityZone)
 
-	s := session.Must(session.NewSession())
+	cfg.Region = thisAvailabilityZone
 
-	svc := ec2.New(s, &aws.Config{
-		Region: &thisAvailabilityZone,
-	})
+	svc := ec2.NewFromConfig(cfg)
 
-	desc, err := svc.DescribeAddresses(&ec2.DescribeAddressesInput{
-		PublicIps: []*string{aws.String(publicIP)},
+	desc, err := svc.DescribeAddresses(context.Background(), &ec2.DescribeAddressesInput{
+		PublicIps: []string{(publicIP)},
 	})
 
 	if err != nil {
@@ -103,7 +107,7 @@ func main() {
 
 	allocation := desc.Addresses[0]
 
-	resp, err := svc.AssociateAddress(&ec2.AssociateAddressInput{
+	resp, err := svc.AssociateAddress(context.Background(), &ec2.AssociateAddressInput{
 		InstanceId:         &thisInstanceID,
 		AllowReassociation: aws.Bool(true),
 		AllocationId:       allocation.AllocationId,
@@ -115,7 +119,7 @@ func main() {
 
 	log.Println("Associated:", *resp.AssociationId)
 
-	if !WaitForIP(publicIP) {
+	if !WaitForIP(imdsClient, publicIP) {
 		log.Fatal("Failed to see public IP update in a timely fashion.")
 	}
 }
