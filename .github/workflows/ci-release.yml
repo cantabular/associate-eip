@@ -22,7 +22,7 @@ jobs:
           make
       - name: Create Release and Upload Asset
         run: |
-          gh release create "${GITHUB_REF_NAME}" ./associate-ebs \
+          gh release create "${GITHUB_REF_NAME}" ./associate-eip \
             --title "${GITHUB_REF_NAME}" \
             --draft
         env:
