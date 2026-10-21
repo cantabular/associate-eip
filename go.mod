@@ -1,6 +1,6 @@
 module github.com/sensiblecodeio/associate-eip
 
-go 1.25.1
+go 1.27
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.0
